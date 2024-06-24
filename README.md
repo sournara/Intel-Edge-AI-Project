@@ -7,6 +7,12 @@
 git clone --recurse-submodules https://github.com/sournara/Intel-Edge-AI-Project.git
 ```
 
+## Google Sheets
+
+```shell
+https://docs.google.com/spreadsheets/d/1-y9iHD8hGX5raPm22Uga8TWtHSCdf2FBWDwfucm3u0c/edit?gid=0#gid=0
+```
+
 ## Team projects
 
 ### Team: 쿠크루 (Cupid Crew) - 3조

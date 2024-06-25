@@ -1,6 +1,6 @@
 import tkinter as tk
 import os
-from tkinter import messagebox
+from tkinter import messagebox , Toplevel
 from PIL import Image, ImageTk, ImageSequence
 import cv2
 ###### pose estimation
@@ -496,9 +496,6 @@ def draw_poses(img, poses, point_score_threshold, skeleton=default_skeleton):
     return img
 
 #def degree():
-
-
-
 ######
 
 
@@ -511,19 +508,23 @@ def print_entry(event=None):
     if value.strip() == "":
         messagebox.showwarning("경고", "값을 입력하세요!") 
     else:
-        switch_to_main() 
+        start_to_main() 
 
-def switch_to_main():
+def start_to_main():
     start_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
 
-def switch_to_start():
+def main_to_start():
     main_frame.pack_forget()
     start_frame.pack(fill="both", expand=True)
 
-def switch_to_menu1():
+def main_to_menu1():
     main_frame.pack_forget()
     menu1_frame.pack(fill="both", expand=True)
+
+def menu1_to_main():
+    menu1_frame.pack_forget()
+    main_frame.pack(fill="both", expand=True)
 
 def create_image_button(input_image,x,y,command):
     try:
@@ -533,6 +534,19 @@ def create_image_button(input_image,x,y,command):
         button.place(x=x, y=y)
     except tk.TclError:
         print(f"Failed to load image at {pig_image}")
+
+def create_back_button(frame,command):
+    button = tk.Button(frame, text="뒤로", command=command)
+    button.pack(pady=10)
+
+def open_new_window():
+    newtk = tk.Tk()
+    new_window = Toplevel(newtk)
+    new_window.title("New Window")
+    new_window.geometry("200x100")
+
+    label = tk.Label(new_window, text="This is a new window")
+    label.pack(pady=10)
 
 class AnimatedGIF:
     def __init__(self, canvas, filepath, x, y, width, height):
@@ -575,6 +589,7 @@ class VideoCapture:
 
     def update(self):
         ret, frame = self.cap.read()
+        frame = frame[:,1*self.width//4 :3*self.width//4]
         if ret:
             self.current_frame = frame.copy()  # 현재 프레임을 변수에 저장
 
@@ -600,6 +615,7 @@ class VideoCapture:
             if self.image_id:
                 self.canvas.delete(self.image_id)
             self.image_id = self.canvas.create_image(self.x, self.y, anchor='nw', image=imgtk)
+            
             self.canvas.image = imgtk
         self.canvas.after(10, self.update)  # 10ms마다 업데이트
 
@@ -618,7 +634,7 @@ window = tk.Tk()
 window.title("모드 전환 예제")
 window.geometry(f"{window_width}x{window_height}")
 
-# 시작 모드 프레임 생성
+##### 시작 모드 프레임 생성
 start_frame = tk.Frame(window)
 start_frame.pack(fill="both", expand=True)
 
@@ -634,8 +650,10 @@ entry.pack(pady=10)
 entry.bind("<Return>", print_entry)
 button = tk.Button(start_frame, text="입력 확인", command=print_entry)
 button.pack(pady=10)
+#####
 
-# 메인 모드 프레임 생성
+
+##### 메인 모드 프레임 생성
 main_frame = tk.Frame(window)
 
 # Canvas 생성 및 배경 이미지 설정
@@ -644,17 +662,20 @@ canvas.pack(fill="both", expand=True)
 animated_bg = AnimatedGIF(canvas, background_image, 0, 0, window_width, window_height)
 
 # 버튼 생성
-button1 = create_image_button(pig_image, pad, pad, switch_to_start)
-button2 = create_image_button(pig_image, window_height - pad, pad, switch_to_menu1)
+button1 = create_image_button(pig_image, pad, pad, main_to_start)
+button2 = create_image_button(pig_image, window_height - pad, pad, main_to_menu1)
 button3 = create_image_button(pig_image, pad, window_height - 300, print_test)
 button4 = create_image_button(pig_image, window_height - pad, window_height - 300, print_test)
-
+#####
 
 
 ##### menu1
 menu1_frame = tk.Frame(window)
+create_back_button(menu1_frame,menu1_to_main)
 canvas = tk.Canvas(menu1_frame, width=window_width, height=window_height)
 canvas.pack(fill="both", expand=True)
+
+
 #video_capture = VideoCapture(canvas, window_width // 4, window_height // 4, window_width // 2, window_height // 2)
 
 #풀 화면

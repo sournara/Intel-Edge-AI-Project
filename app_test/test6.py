@@ -675,6 +675,7 @@ create_back_button(menu1_frame,menu1_to_main)
 canvas = tk.Canvas(menu1_frame, width=window_width, height=window_height)
 canvas.pack(fill="both", expand=True)
 
+
 #video_capture = VideoCapture(canvas, window_width // 4, window_height // 4, window_width // 2, window_height // 2)
 
 #풀 화면

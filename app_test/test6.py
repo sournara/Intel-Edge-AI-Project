@@ -513,7 +513,6 @@ def print_entry(event=None):
 def start_to_main():
     start_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
-
 def main_to_start():
     main_frame.pack_forget()
     start_frame.pack(fill="both", expand=True)
@@ -521,10 +520,36 @@ def main_to_start():
 def main_to_menu1():
     main_frame.pack_forget()
     menu1_frame.pack(fill="both", expand=True)
+    open_new_window()
+def main_to_menu2():
+    main_frame.pack_forget()
+    menu2_frame.pack(fill="both", expand=True)
+def main_to_menu3():
+    main_frame.pack_forget()
+    menu3_frame.pack(fill="both", expand=True)
+def main_to_menu4():
+    main_frame.pack_forget()
+    menu4_frame.pack(fill="both", expand=True)
 
 def menu1_to_main():
     menu1_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
+def menu2_to_main():
+    menu2_frame.pack_forget()
+    main_frame.pack(fill="both", expand=True)
+def menu3_to_main():
+    menu3_frame.pack_forget()
+    main_frame.pack(fill="both", expand=True)
+def menu4_to_main():
+    menu4_frame.pack_forget()
+    main_frame.pack(fill="both", expand=True)
+
+def open_new_window():
+    new_window = Toplevel(window)
+    new_window.title("새 창")
+    new_window.geometry("200x100")
+    label = tk.Label(new_window, text="이것은 새로운 창입니다")
+    label.pack(pady=10)
 
 def create_image_button(input_image,x,y,command):
     try:
@@ -534,19 +559,6 @@ def create_image_button(input_image,x,y,command):
         button.place(x=x, y=y)
     except tk.TclError:
         print(f"Failed to load image at {pig_image}")
-
-def create_back_button(frame,command):
-    button = tk.Button(frame, text="뒤로", command=command)
-    button.pack(pady=10)
-
-def open_new_window():
-    newtk = tk.Tk()
-    new_window = Toplevel(newtk)
-    new_window.title("New Window")
-    new_window.geometry("200x100")
-
-    label = tk.Label(new_window, text="This is a new window")
-    label.pack(pady=10)
 
 class AnimatedGIF:
     def __init__(self, canvas, filepath, x, y, width, height):
@@ -583,51 +595,59 @@ class VideoCapture:
         self.width = width
         self.height = height
         self.cap = cv2.VideoCapture(0)  # 0번 카메라(기본 웹캠) 사용
+        self.cap2 = cv2.VideoCapture(2)
         self.image_id = None
         self.current_frame = None  # 현재 프레임을 저장할 변수
         self.update()
 
     def update(self):
         ret, frame = self.cap.read()
+        ret, frame2 = self.cap2.read()
         frame = frame[:,1*self.width//4 :3*self.width//4]
+        frame2 = frame2[:,1*self.width//4 :3*self.width//4]
         if ret:
             self.current_frame = frame.copy()  # 현재 프레임을 변수에 저장
 
-            ####pose estimation
-
+            ##### pose estimation
             pafs_output_key = compiled_model.output("Mconv7_stage2_L1")
             heatmaps_output_key = compiled_model.output("Mconv7_stage2_L2")
             scale = 1280 / max(frame.shape)
+            scale2 = 1280 / max(frame2.shape)
             if scale < 1:
                 frame = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+                frame2 = cv2.resize(frame2, None, fx=scale2, fy=scale2, interpolation=cv2.INTER_AREA)
             input_img = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+            input_img2 = cv2.resize(frame2, (width, height), interpolation=cv2.INTER_AREA)
             input_img = input_img.transpose((2, 0, 1))[np.newaxis, ...]
+            input_img2 = input_img2.transpose((2, 0, 1))[np.newaxis, ...]
             results = compiled_model([input_img])
+            results2 = compiled_model([input_img2])
             pafs = results[pafs_output_key]
+            pafs2 = results2[pafs_output_key]
             heatmaps = results[heatmaps_output_key]
+            heatmaps2 = results2[heatmaps_output_key]
             poses, scores = process_results(frame, pafs, heatmaps)
+            poses2, scores2 = process_results(frame2, pafs2, heatmaps2)
             frame = draw_poses(frame, poses, 0.1)
+            frame2 = draw_poses(frame2, poses2, 0.1)
+            ######
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
+            frame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
             frame = cv2.resize(frame, (self.width, self.height))  # 프레임 크기 조정
+            frame2 = cv2.resize(frame2, (self.width, self.height))  # 프레임 크기 조정
             img = Image.fromarray(frame)
+            img2 = Image.fromarray(frame2)
             imgtk = ImageTk.PhotoImage(image=img)
+            imgtk2 = ImageTk.PhotoImage(image=img2)
             if self.image_id:
                 self.canvas.delete(self.image_id)
             self.image_id = self.canvas.create_image(self.x, self.y, anchor='nw', image=imgtk)
+            self.image_id = self.canvas.create_image(window_width //2, self.y, anchor='nw', image=imgtk2)
             
             self.canvas.image = imgtk
+            self.canvas.image2 = imgtk2
         self.canvas.after(10, self.update)  # 10ms마다 업데이트
-
-    def get_current_frame(self):
-        return self.current_frame
-
-###class Video_capture2():
-## 라즈베리 파이로 옆면 받아와서 출력
-
-
-
-
 
 # tkinter 윈도우 생성
 window = tk.Tk()
@@ -662,26 +682,41 @@ canvas.pack(fill="both", expand=True)
 animated_bg = AnimatedGIF(canvas, background_image, 0, 0, window_width, window_height)
 
 # 버튼 생성
-button1 = create_image_button(pig_image, pad, pad, main_to_start)
-button2 = create_image_button(pig_image, window_height - pad, pad, main_to_menu1)
-button3 = create_image_button(pig_image, pad, window_height - 300, print_test)
-button4 = create_image_button(pig_image, window_height - pad, window_height - 300, print_test)
+button1 = create_image_button(pig_image, pad, pad, main_to_menu1)
+button2 = create_image_button(pig_image, window_height - pad, pad, main_to_menu2)
+button3 = create_image_button(pig_image, pad, window_height - 300, main_to_menu3)
+button4 = create_image_button(pig_image, window_height - pad, window_height - 300, main_to_menu4)
 #####
 
 
 ##### menu1
 menu1_frame = tk.Frame(window)
-create_back_button(menu1_frame,menu1_to_main)
 canvas = tk.Canvas(menu1_frame, width=window_width, height=window_height)
 canvas.pack(fill="both", expand=True)
+video_capture = VideoCapture(canvas, 0,0, window_width //2, window_height)## 화면 오른쪽에 refernce image 추가
+button = tk.Button(menu1_frame, text="뒤로", command=menu1_to_main)
+button.place(x=0, y=0)
+#####
 
-#video_capture = VideoCapture(canvas, window_width // 4, window_height // 4, window_width // 2, window_height // 2)
 
-#풀 화면
-video_capture = VideoCapture(canvas, 0,0, window_width //2, window_height )## 화면 오른쪽에 refernce image 추가
+##### menu2
+menu2_frame = tk.Frame(window)
+canvas.pack(fill="both", expand=True)
+#####
 
-#video_capture2 = video_Capture2() 테두리 윤곽선도 추가해주세요
 
+##### menu3
+menu3_frame = tk.Frame(window)
+
+canvas.pack(fill="both", expand=True)
+#####
+
+
+##### menu4
+menu4_frame = tk.Frame(window)
+
+canvas.pack(fill="both", expand=True)
+#####
 
 # tkinter 윈도우 실행
 window.mainloop()

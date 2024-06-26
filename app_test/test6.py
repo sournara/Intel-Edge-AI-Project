@@ -551,6 +551,10 @@ def open_new_window():
     label = tk.Label(new_window, text="이것은 새로운 창입니다")
     label.pack(pady=10)
 
+def menu1_to_main():
+    menu1_frame.pack_forget()
+    main_frame.pack(fill="both", expand=True)
+
 def create_image_button(input_image,x,y,command):
     try:
         button_image = tk.PhotoImage(file=input_image)
@@ -559,6 +563,19 @@ def create_image_button(input_image,x,y,command):
         button.place(x=x, y=y)
     except tk.TclError:
         print(f"Failed to load image at {pig_image}")
+
+def create_back_button(frame,command):
+    button = tk.Button(frame, text="뒤로", command=command)
+    button.pack(pady=10)
+
+def open_new_window():
+    newtk = tk.Tk()
+    new_window = Toplevel(newtk)
+    new_window.title("New Window")
+    new_window.geometry("200x100")
+
+    label = tk.Label(new_window, text="This is a new window")
+    label.pack(pady=10)
 
 class AnimatedGIF:
     def __init__(self, canvas, filepath, x, y, width, height):
@@ -586,6 +603,7 @@ class AnimatedGIF:
             self.image_id = self.canvas.create_image(self.x, self.y, anchor='nw', image=self.sequence[self.current_frame])
             self.current_frame = (self.current_frame + 1) % len(self.sequence)
             self.canvas.after(50, self.animate)
+
 
 class VideoCapture:
     def __init__(self, canvas, x, y, width, height):
@@ -682,12 +700,12 @@ canvas.pack(fill="both", expand=True)
 animated_bg = AnimatedGIF(canvas, background_image, 0, 0, window_width, window_height)
 
 # 버튼 생성
+
 button1 = create_image_button(pig_image, pad, pad, main_to_menu1)
 button2 = create_image_button(pig_image, window_height - pad, pad, main_to_menu2)
 button3 = create_image_button(pig_image, pad, window_height - 300, main_to_menu3)
 button4 = create_image_button(pig_image, window_height - pad, window_height - 300, main_to_menu4)
 #####
-
 
 ##### menu1
 menu1_frame = tk.Frame(window)
@@ -717,6 +735,7 @@ menu4_frame = tk.Frame(window)
 
 canvas.pack(fill="both", expand=True)
 #####
+
 
 # tkinter 윈도우 실행
 window.mainloop()

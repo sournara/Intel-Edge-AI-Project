@@ -5,6 +5,7 @@ from PIL import Image, ImageTk, ImageSequence
 import cv2
 ###### pose estimation
 
+import glob
 import collections
 import time
 from pathlib import Path
@@ -19,12 +20,15 @@ window_width = 1600
 window_height = 1200
 pad = 50
 current_dir = os.path.dirname(__file__)
-image_path = os.path.join(current_dir,"resource","image")
-model_path = os.path.join(current_dir,"resource","model")
 
+model_path = os.path.join(current_dir,"resource","model")
 pose_model = os.path.join(model_path,"human-pose-estimation-0001.xml")
+
+image_path = os.path.join(current_dir,"resource","image")
+squart_path = os.path.join(image_path,"squart.png")
 pig_image = os.path.join(image_path,"pig.png")
 background_image = os.path.join(image_path,"walk.gif")
+
 
 
 ######pose set up
@@ -38,6 +42,9 @@ device = widgets.Dropdown(
 )
 model = core.read_model(pose_model)
 compiled_model = core.compile_model(model=model, device_name=device.value, config={"PERFORMANCE_HINT": "LATENCY"})
+
+pafs_output_key = compiled_model.output("Mconv7_stage2_L1")
+heatmaps_output_key = compiled_model.output("Mconv7_stage2_L2")
 
 input_layer = compiled_model.input(0)
 output_layers = compiled_model.outputs
@@ -469,7 +476,6 @@ default_skeleton = (
     (4, 6),
 )
 
-
 def draw_poses(img, poses, point_score_threshold, skeleton=default_skeleton):
     if poses.size == 0:
         return img
@@ -495,6 +501,99 @@ def draw_poses(img, poses, point_score_threshold, skeleton=default_skeleton):
     cv2.addWeighted(img, 0.4, img_limbs, 0.6, 0, dst=img)
     return img
 
+class angle_calculater:
+    def __init__(self):
+        self.IMG1_INDEX = 0
+        self.IMG2_INDEX = 1
+        self.IMG3_INDEX = 2
+        self.IMG4_INDEX = 3
+        self.IMG5_INDEX = 4
+        self.IMG6_INDEX = 5
+
+        self.LEFT_NECK_INDEX = 0
+        self.RIGHT_NECK_INDEX = 1
+        self.LEFT_SHOULDER_INDEX = 2
+        self.LEFT_INSIDE_SHOULDER_INDEX = 3
+        self.LEFT_ELBOW_INDEX = 4
+        self.LEFT_ARMPIT_INDEX = 5
+        self.RIGHT_INSIDE_SHOULDER_INDEX = 6
+        self.RIGHT_SHOULDER_INDEX = 7
+        self.RIGHT_ARMPIT_INDEX = 8
+        self.RIGHT_ELBOW_INDEX = 9
+        self.LEFT_PELVIS_INDEX = 10
+        self.LEFT_HIP_INDEX = 11
+        self.RIGHT_PELVIS_INDEX = 12
+        self.RIGHT_HIP_INDEX = 13
+        self.LEFT_LEG_INDEX = 14
+        self.RIGHT_LEG_INDEX = 15
+        self.LEFT_KNEE_INDEX = 16
+        self.RIGHT_KNEE_INDEX = 17
+        self.all_angles = []
+
+        left_neck_angle = None
+        right_neck_angle = None
+        left_shoulder_angle = None
+        left_inside_shoulder_angle = None
+        left_elbow_angle = None
+        left_armpit_angle = None
+        right_inside_shoulder_angle = None
+        right_shoulder_angle = None
+        right_armpit_angle = None
+        right_elbow_angle = None
+        left_pelvis_angle = None
+        left_hip_angle = None
+        right_pelvis_angle = None
+        right_hip_angle = None
+        left_leg_angle = None
+        right_leg_angle = None
+        left_knee_angle = None
+        right_knee_angle = None
+
+    def calculate_angles(self, poses):
+        for pose in poses:
+            joint = np.zeros((18, 2))
+            for j, lm in enumerate(pose):
+                joint[j] = [lm[0], lm[1]]
+
+            # Compute angles between joints
+            v1 = joint[[1, 1, 1, 5, 5, 6, 6, 7, 8, 12, 11, 13, 12, 14], :]
+            v2 = joint[[2, 5, 6, 7, 11, 12, 8, 9, 10, 11, 13, 15, 14, 16], :]
+            v = v2 - v1
+            v = v / np.linalg.norm(v, axis=1)[:, np.newaxis]
+
+            # Get angle using arccos of dot product
+            angle = np.arccos(np.einsum('nt,nt->n',
+                                        v[[0, 0, 1, 1, 3, 3, 2, 2, 6, 6, 4, 4, 5, 5, 9, 9, 10, 12], :],
+                                        v[[1, 2, 3, 4, 7, 4, 5, 6, 5, 8, 9, 10, 9, 12, 10, 12, 11, 13], :]))
+            angle = np.degrees(angle)
+            self.all_angles.append(angle)
+            #print("All angles:", self.all_angles)
+        return self.all_angles
+
+img_angle = angle_calculater()
+
+def image_init(img_path):
+    frame = cv2.imread(img_path)
+
+    input_img = cv2.resize(frame, (456, 256), interpolation=cv2.INTER_AREA)
+    # Create a batch of images (size = 1).
+    input_img = input_img.transpose((2, 0, 1))[np.newaxis, ...]
+
+    # Measure processing time.
+    start_time = time.time()
+    # Get results.
+    results = compiled_model([input_img])
+    stop_time = time.time()
+
+    pafs = results[pafs_output_key]
+    heatmaps = results[heatmaps_output_key]
+    # Get poses from network results.
+    poses, scores = process_results(frame, pafs, heatmaps)
+
+    all_angle = img_angle.calculate_angles(poses)
+    left_neck = all_angle[img_angle.IMG1_INDEX][img_angle.LEFT_NECK_INDEX]
+    return left_neck
+  
 #def degree():
 ######
 
@@ -520,7 +619,9 @@ def main_to_start():
 def main_to_menu1():
     main_frame.pack_forget()
     menu1_frame.pack(fill="both", expand=True)
-    open_new_window()
+    open_new_window(squart_path)
+
+
 def main_to_menu2():
     main_frame.pack_forget()
     menu2_frame.pack(fill="both", expand=True)
@@ -544,17 +645,17 @@ def menu4_to_main():
     menu4_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
 
-def open_new_window():
+
+def open_new_window(image_path):
     new_window = Toplevel(window)
     new_window.title("새 창")
-    new_window.geometry("200x100")
-    label = tk.Label(new_window, text="이것은 새로운 창입니다")
-    label.pack(pady=10)
-
-def menu1_to_main():
-    menu1_frame.pack_forget()
-    main_frame.pack(fill="both", expand=True)
-
+        # 이미지 로드 및 라벨에 설정
+    image = Image.open(image_path)
+    photo = ImageTk.PhotoImage(image)
+    label = tk.Label(new_window, image=photo)
+    label.image = photo  # 이 줄을 추가하여 이미지가 가비지 컬렉션되지 않도록 방지
+    label.pack(padx=20, pady=20)
+    
 def create_image_button(input_image,x,y,command):
     try:
         button_image = tk.PhotoImage(file=input_image)
@@ -615,7 +716,7 @@ class VideoCapture:
         self.cap = cv2.VideoCapture(0)  # 0번 카메라(기본 웹캠) 사용
         self.cap2 = cv2.VideoCapture(2)
         self.image_id = None
-        self.current_frame = None  # 현재 프레임을 저장할 변수
+        self.data = None
         self.update()
 
     def update(self):
@@ -623,12 +724,13 @@ class VideoCapture:
         ret, frame2 = self.cap2.read()
         frame = frame[:,1*self.width//4 :3*self.width//4]
         frame2 = frame2[:,1*self.width//4 :3*self.width//4]
+
+        self.data=[]
+
         if ret:
             self.current_frame = frame.copy()  # 현재 프레임을 변수에 저장
-
+            data = []
             ##### pose estimation
-            pafs_output_key = compiled_model.output("Mconv7_stage2_L1")
-            heatmaps_output_key = compiled_model.output("Mconv7_stage2_L2")
             scale = 1280 / max(frame.shape)
             scale2 = 1280 / max(frame2.shape)
             if scale < 1:
@@ -649,6 +751,24 @@ class VideoCapture:
             frame = draw_poses(frame, poses, 0.1)
             frame2 = draw_poses(frame2, poses2, 0.1)
             ######
+            for pose in poses:
+                joint = np.zeros((18, 2))
+                for j, lm in enumerate(pose):
+                    joint[j] = [lm[0], lm[1]]
+
+                # Compute angles between joints
+                v1 = joint[[1, 1, 1, 5, 5, 6, 6, 7, 8, 12, 11, 13, 12, 14], :]
+                v2 = joint[[2, 5, 6, 7, 11, 12, 8, 9, 10, 11, 13, 15, 14, 16], :]
+                v = v2 - v1
+                v = v / np.linalg.norm(v, axis=1)[:, np.newaxis]
+
+                # Get angle using arccos of dot product
+                angle = np.arccos(np.einsum('nt,nt->n',
+                                            v[[0, 0, 1, 1, 3, 3, 2, 2, 6, 6, 4, 4, 5, 5, 9, 9, 10, 12], :],
+                                            v[[1, 2, 3, 4, 7, 4, 5, 6, 5, 8, 9, 10, 9, 12, 10, 12, 11, 13], :]))
+                angle = np.degrees(angle)
+            print(f"{angle[0]},{left_neck} ")
+
 
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
             frame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
@@ -662,10 +782,12 @@ class VideoCapture:
                 self.canvas.delete(self.image_id)
             self.image_id = self.canvas.create_image(self.x, self.y, anchor='nw', image=imgtk)
             self.image_id = self.canvas.create_image(window_width //2, self.y, anchor='nw', image=imgtk2)
-            
             self.canvas.image = imgtk
             self.canvas.image2 = imgtk2
+
         self.canvas.after(10, self.update)  # 10ms마다 업데이트
+
+left_neck=image_init(squart_path)
 
 # tkinter 윈도우 생성
 window = tk.Tk()
@@ -690,7 +812,6 @@ button = tk.Button(start_frame, text="입력 확인", command=print_entry)
 button.pack(pady=10)
 #####
 
-
 ##### 메인 모드 프레임 생성
 main_frame = tk.Frame(window)
 
@@ -706,6 +827,7 @@ button2 = create_image_button(pig_image, window_height - pad, pad, main_to_menu2
 button3 = create_image_button(pig_image, pad, window_height - 300, main_to_menu3)
 button4 = create_image_button(pig_image, window_height - pad, window_height - 300, main_to_menu4)
 #####
+
 
 ##### menu1
 menu1_frame = tk.Frame(window)

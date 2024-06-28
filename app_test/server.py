@@ -1,11 +1,11 @@
 import tkinter as tk
 import os
-from tkinter import messagebox , Toplevel
+from tkinter import messagebox, Toplevel
 from PIL import Image, ImageTk, ImageSequence
 import cv2
-###### pose estimation
+import socket
 
-import glob
+###### pose estimation
 import collections
 import time
 from pathlib import Path
@@ -15,7 +15,6 @@ from numpy.lib.stride_tricks import as_strided
 import openvino as ov
 import ipywidgets as widgets
 ######
-
 
 window_width = 1600
 window_height = 1200
@@ -594,7 +593,7 @@ def image_init(img_path):
     all_angle = img_angle.calculate_angles(poses)
     left_neck = all_angle[img_angle.IMG1_INDEX][img_angle.LEFT_NECK_INDEX]
     return left_neck
-
+  
 #def degree():
 ######
 
@@ -633,7 +632,6 @@ def main_to_menu4():
     main_frame.pack_forget()
     menu4_frame.pack(fill="both", expand=True)
 
-
 def menu1_to_main():
     menu1_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
@@ -646,6 +644,7 @@ def menu3_to_main():
 def menu4_to_main():
     menu4_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
+
 
 def open_new_window(image_path):
     new_window = Toplevel(window)
@@ -670,14 +669,24 @@ def create_back_button(frame,command):
     button = tk.Button(frame, text="뒤로", command=command)
     button.pack(pady=10)
 
-def open_new_window():
-    newtk = tk.Tk()
-    new_window = Toplevel(newtk)
-    new_window.title("New Window")
-    new_window.geometry("200x100")
+# def open_new_window():
+#     newtk = tk.Tk()
+#     new_window = Toplevel(newtk)
+#     new_window.title("New Window")
+#     new_window.geometry("200x100")
 
-    label = tk.Label(new_window, text="This is a new window")
-    label.pack(pady=10)
+#     label = tk.Label(new_window, text="This is a new window")
+#     label.pack(pady=10)
+
+def recvall(sock, count):
+    buf = b''
+    while count:
+        newbuf = sock.recv(count)
+        if not newbuf:
+            return None
+        buf += newbuf
+        count -= len(newbuf)
+    return buf
 
 class AnimatedGIF:
     def __init__(self, canvas, filepath, x, y, width, height):
@@ -715,78 +724,105 @@ class VideoCapture:
         self.width = width
         self.height = height
         self.cap = cv2.VideoCapture(0)  # 0번 카메라(기본 웹캠) 사용
-        self.cap2 = cv2.VideoCapture(2)
+        self.host = "서버 IP"
+        self.port = 0 # 서버 Port Number
+        self.image_id = None
+        self.current_frame = None  # 현재 프레임을 저장할 변수
+        self.setup_socket()
         self.image_id = None
         self.data = None
         self.update()
 
+    def setup_socket(self):
+        # 서버 소켓 생성
+        self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_socket.bind((self.host, self.port))
+        self.server_socket.listen(10)
+        print(f"서버가 {self.host}:{self.port}에서 대기 중입니다...")
+        # 클라이언트 연결 대기
+        self.client_socket, self.client_address = self.server_socket.accept()
+        print(f"클라이언트 {self.client_address}가 연결되었습니다.")
+        # 클라이언트로부터 초기 메시지 수신
+
+        response = f"서버 ({self.host})와 연결되었습니다."
+        self.client_socket.send(response.encode("utf-8"))
+
     def update(self):
         ret, frame = self.cap.read()
-        ret, frame2 = self.cap2.read()
         frame = frame[:,1*self.width//4 :3*self.width//4]
-        frame2 = frame2[:,1*self.width//4 :3*self.width//4]
+        length = recvall(self.client_socket, 16)
 
-        self.data=[]
+        self.data = []
+        
+        if length:
+            byteData = recvall(self.client_socket, int(length))
+            
+            if byteData and ret:
+                self.current_frame = frame.copy()  # 현재 프레임을 변수에 저장
+                data = []
+                data2 = np.frombuffer(byteData, dtype='uint8')
+                frame2 = cv2.imdecode(data2, cv2.IMREAD_COLOR)
+                
+                ##### pose estimation
+                scale = 1280 / max(frame.shape)
+                scale2 = 1280 / max(frame2.shape)
+                if scale < 1:
+                    frame = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+                    frame2 = cv2.resize(frame2, None, fx=scale2, fy=scale2, interpolation=cv2.INTER_AREA)
+                input_img = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+                input_img2 = cv2.resize(frame2, (width, height), interpolation=cv2.INTER_AREA)
+                input_img = input_img.transpose((2, 0, 1))[np.newaxis, ...]
+                input_img2 = input_img2.transpose((2, 0, 1))[np.newaxis, ...]
+                results = compiled_model([input_img])
+                results2 = compiled_model([input_img2])
+                pafs = results[pafs_output_key]
+                pafs2 = results2[pafs_output_key]
+                heatmaps = results[heatmaps_output_key]
+                heatmaps2 = results2[heatmaps_output_key]
+                poses, scores = process_results(frame, pafs, heatmaps)
+                poses2, scores2 = process_results(frame2, pafs2, heatmaps2)
+                frame = draw_poses(frame, poses, 0.1)
+                frame2 = draw_poses(frame2, poses2, 0.1)
+                ######
+                for pose in poses:
+                    joint = np.zeros((18, 2))
+                    for j, lm in enumerate(pose):
+                        joint[j] = [lm[0], lm[1]]
 
-        if ret:
-            self.current_frame = frame.copy()  # 현재 프레임을 변수에 저장
-            data = []
-            ##### pose estimation
-            scale = 1280 / max(frame.shape)
-            scale2 = 1280 / max(frame2.shape)
-            if scale < 1:
-                frame = cv2.resize(frame, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
-                frame2 = cv2.resize(frame2, None, fx=scale2, fy=scale2, interpolation=cv2.INTER_AREA)
-            input_img = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
-            input_img2 = cv2.resize(frame2, (width, height), interpolation=cv2.INTER_AREA)
-            input_img = input_img.transpose((2, 0, 1))[np.newaxis, ...]
-            input_img2 = input_img2.transpose((2, 0, 1))[np.newaxis, ...]
-            results = compiled_model([input_img])
-            results2 = compiled_model([input_img2])
-            pafs = results[pafs_output_key]
-            pafs2 = results2[pafs_output_key]
-            heatmaps = results[heatmaps_output_key]
-            heatmaps2 = results2[heatmaps_output_key]
-            poses, scores = process_results(frame, pafs, heatmaps)
-            poses2, scores2 = process_results(frame2, pafs2, heatmaps2)
-            frame = draw_poses(frame, poses, 0.1)
-            frame2 = draw_poses(frame2, poses2, 0.1)
-            ######
-            for pose in poses:
-                joint = np.zeros((18, 2))
-                for j, lm in enumerate(pose):
-                    joint[j] = [lm[0], lm[1]]
+                    # Compute angles between joints
+                    v1 = joint[[1, 1, 1, 5, 5, 6, 6, 7, 8, 12, 11, 13, 12, 14], :]
+                    v2 = joint[[2, 5, 6, 7, 11, 12, 8, 9, 10, 11, 13, 15, 14, 16], :]
+                    v = v2 - v1
+                    v = v / np.linalg.norm(v, axis=1)[:, np.newaxis]
 
-                # Compute angles between joints
-                v1 = joint[[1, 1, 1, 5, 5, 6, 6, 7, 8, 12, 11, 13, 12, 14], :]
-                v2 = joint[[2, 5, 6, 7, 11, 12, 8, 9, 10, 11, 13, 15, 14, 16], :]
-                v = v2 - v1
-                v = v / np.linalg.norm(v, axis=1)[:, np.newaxis]
-
-                # Get angle using arccos of dot product
-                angle = np.arccos(np.einsum('nt,nt->n',
-                                            v[[0, 0, 1, 1, 3, 3, 2, 2, 6, 6, 4, 4, 5, 5, 9, 9, 10, 12], :],
-                                            v[[1, 2, 3, 4, 7, 4, 5, 6, 5, 8, 9, 10, 9, 12, 10, 12, 11, 13], :]))
-                angle = np.degrees(angle)
-            print(f"{angle[0]},{left_neck} ")
+                    # Get angle using arccos of dot product
+                    angle = np.arccos(np.einsum('nt,nt->n',
+                                                v[[0, 0, 1, 1, 3, 3, 2, 2, 6, 6, 4, 4, 5, 5, 9, 9, 10, 12], :],
+                                                v[[1, 2, 3, 4, 7, 4, 5, 6, 5, 8, 9, 10, 9, 12, 10, 12, 11, 13], :]))
+                    angle = np.degrees(angle)
+                    print(f"{angle[0]},{left_neck} ")
 
 
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
-            frame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
-            frame = cv2.resize(frame, (self.width, self.height))  # 프레임 크기 조정
-            frame2 = cv2.resize(frame2, (self.width, self.height))  # 프레임 크기 조정
-            img = Image.fromarray(frame)
-            img2 = Image.fromarray(frame2)
-            imgtk = ImageTk.PhotoImage(image=img)
-            imgtk2 = ImageTk.PhotoImage(image=img2)
-            if self.image_id:
-                self.canvas.delete(self.image_id)
-            self.image_id = self.canvas.create_image(self.x, self.y, anchor='nw', image=imgtk)
-            self.image_id = self.canvas.create_image(window_width //2, self.y, anchor='nw', image=imgtk2)
-            self.canvas.image = imgtk
-            self.canvas.image2 = imgtk2
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
+                frame2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2RGB)  # BGR에서 RGB로 변환
+                frame = cv2.resize(frame, (self.width, self.height))  # 프레임 크기 조정
+                frame2 = cv2.resize(frame2, (self.width, self.height))  # 프레임 크기 조정
+                img = Image.fromarray(frame)
+                img2 = Image.fromarray(frame2)
+                imgtk = ImageTk.PhotoImage(image=img)
+                imgtk2 = ImageTk.PhotoImage(image=img2)
+                if self.image_id:
+                    self.canvas.delete(self.image_id)
+                self.image_id = self.canvas.create_image(self.x, self.y, anchor='nw', image=imgtk)
+                self.image_id = self.canvas.create_image(window_width //2, self.y, anchor='nw', image=imgtk2)
+                self.canvas.image = imgtk
+                self.canvas.image2 = imgtk2
 
-        self.canvas.after(10, self.update)  # 10ms마다 업데이트
+        self.canvas.after(10, self.update) # 10ms마다 업데이트
+
+    def __del__(self):
+        self.client_socket.close()
+        self.server_socket.close()
 
 left_neck=image_init(squart_path)
 
@@ -834,7 +870,7 @@ button4 = create_image_button(pig_image, window_height - pad, window_height - 30
 menu1_frame = tk.Frame(window)
 canvas = tk.Canvas(menu1_frame, width=window_width, height=window_height)
 canvas.pack(fill="both", expand=True)
-video_capture = VideoCapture(canvas, 0,0, window_width //2, window_height)## 화면 오른쪽에 refernce image 추가
+video_capture = VideoCapture(canvas, 0, 0, window_width // 2, window_height)## 화면 오른쪽에 refernce image 추가
 button = tk.Button(menu1_frame, text="뒤로", command=menu1_to_main)
 button.place(x=0, y=0)
 #####
@@ -858,6 +894,7 @@ menu4_frame = tk.Frame(window)
 
 canvas.pack(fill="both", expand=True)
 #####
+
 
 # tkinter 윈도우 실행
 window.mainloop()

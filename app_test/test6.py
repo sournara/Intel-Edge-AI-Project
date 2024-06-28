@@ -16,6 +16,7 @@ import openvino as ov
 import ipywidgets as widgets
 ######
 
+
 window_width = 1600
 window_height = 1200
 pad = 50
@@ -593,7 +594,7 @@ def image_init(img_path):
     all_angle = img_angle.calculate_angles(poses)
     left_neck = all_angle[img_angle.IMG1_INDEX][img_angle.LEFT_NECK_INDEX]
     return left_neck
-  
+
 #def degree():
 ######
 
@@ -632,6 +633,7 @@ def main_to_menu4():
     main_frame.pack_forget()
     menu4_frame.pack(fill="both", expand=True)
 
+
 def menu1_to_main():
     menu1_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
@@ -644,7 +646,6 @@ def menu3_to_main():
 def menu4_to_main():
     menu4_frame.pack_forget()
     main_frame.pack(fill="both", expand=True)
-
 
 def open_new_window(image_path):
     new_window = Toplevel(window)
@@ -857,7 +858,6 @@ menu4_frame = tk.Frame(window)
 
 canvas.pack(fill="both", expand=True)
 #####
-
 
 # tkinter 윈도우 실행
 window.mainloop()

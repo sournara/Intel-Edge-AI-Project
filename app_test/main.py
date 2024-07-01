@@ -374,7 +374,7 @@ class VideoCapture:
         
 # tkinter 윈도우 생성
 window = tk.Tk()
-window.title("Project Logo")
+window.title("Great Detective Holmes")
 window.geometry(f"{window_width}x{window_height}+100+100")
 
 style = Style(theme='minty')
@@ -383,12 +383,10 @@ style = Style(theme='minty')
 home_frame = ttk.Frame(window)
 home_frame.pack(fill="x")
 
-# 레이블 생성
-title = ttk.Label(home_frame, text="Project_Logo", style='primary.TLabel', font=('Roboto', 18))
-title.grid(row=0, column=0, padx=10)
-
-title_toggler = ttk.Button(home_frame, text="☰", style='TButton')
-title_toggler.grid(row=0, column=1)
+# 로고
+logo_img = tk.PhotoImage(file="resource/image/logo.png")
+logo = ttk.Label(home_frame, image=logo_img)
+logo.grid(row=0, column=0, padx=10)
 
 collapse = ttk.Frame(home_frame)
 collapse.grid(row=0, column=2, padx=10)

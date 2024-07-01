@@ -54,7 +54,7 @@ actions = ['stretch1',
            'jumpingjack', 
            'oneleg',
            'squat',
-           'run z'
+           'lunge'
           ]
 seq_length = 30
 
@@ -328,13 +328,13 @@ class VideoCapture:
                                 else:
                                     self.squat_detected = False
 
-                                if this_action == 'run z':
-                                    if not self.runz_detected:
-                                        self.runz_count += 1
-                                        self.runz_detected = True
-                                        print("run z : ", self.runz_count)
+                                if this_action == 'lunge':
+                                    if not self.lunge_detected:
+                                        self.lunge_count += 1
+                                        self.lunge_detected = True
+                                        print("lunge : ", self.lunge_count)
                                 else:
-                                    self.runz_detected = False
+                                    self.lunge_detected = False
                                 
                                 if this_action == 'one leg' :
                                     start_time = time.time()

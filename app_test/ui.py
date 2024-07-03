@@ -5,6 +5,8 @@ import os
 from tkinter import messagebox , Toplevel
 from PIL import Image, ImageTk, ImageSequence
 import cv2
+import mediapipe as mp
+
 ###### pose estimation
 
 import glob
@@ -25,12 +27,26 @@ current_dir = os.path.dirname(__file__)
 
 model_path = os.path.join(current_dir,"resource","model")
 pose_model = os.path.join(model_path,"human-pose-estimation-0001.xml")
+md_model= os.path.join(model_path,"model.keras")
 
 image_path = os.path.join(current_dir,"resource","image")
 squart_path = os.path.join(image_path,"squart.png")
 pig_image = os.path.join(image_path,"pig.png")
 background_image = os.path.join(image_path,"walk.gif")
 
+
+######model compile
+md_core = ov.Core()
+
+md_device =widgets.Dropdown(
+    options = md_core.available_devices + ["AUTO"],
+    value="AUTO",
+    description="Device:",
+    disabled=False
+)
+md_model = md_core.read_model(md_model)
+md_compiled_model = md_core.compile_model(model=md_model, device_name=md_device.value, config={"PERFORMANCE_HINT": "LATENCY"})
+md_output_layers = md_compiled_model.output("Mconv7_stage2_L2")
 
 
 ######pose set up
